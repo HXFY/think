@@ -1,35 +1,48 @@
+sudo: false
 language: php
 
-sudo: false
+services:
+  - memcached
+  - mongodb
+  - mysql
+  - postgresql
+  - redis-server
+
+matrix:
+  fast_finish: true
+  include:
+    - php: 5.4
+    - php: 5.5
+    - php: 5.6
+    - php: 7.0
+    - php: hhvm
+  allow_failures:
+    - php: hhvm
 
 cache:
   directories:
     - $HOME/.composer/cache
 
-php:
-  - 5.4
-  - 5.5
-  - 5.6
-
-before_script:
-  - pecl channel-update pecl.php.net
-  - echo "yes" | pecl install apcu-4.0.10
-  - phpenv config-add tests/myconfig.ini
+before_install:
   - composer self-update
-  - composer install
+  - mysql -e "create database IF NOT EXISTS test;" -uroot
+  - psql -c 'DROP DATABASE IF EXISTS test;' -U postgres
+  - psql -c 'create database test;' -U postgres
+
+install:
+  - ./tests/script/install.sh
 
 script:
   ## LINT
-  - find thinkphp ! -path "thinkphp/vendor/*" -type f -name \*.php -exec php -l {} \;
+  - find . -path ./vendor -prune -o -type f -name \*.php -exec php -l {} \;
   ## PHP_CodeSniffer
-  - thinkphp/vendor/bin/phpcs --runtime-set ignore_errors_on_exit 1 --runtime-set ignore_warnings_on_exit 1 --standard=PSR2 --ignore="thinkphp/vendor/*" thinkphp
+  - vendor/bin/phpcs --runtime-set ignore_errors_on_exit 1 --runtime-set ignore_warnings_on_exit 1 --standard=PSR2 --ignore="vendor/*" ./
   ## PHP Copy/Paste Detector
-  - thinkphp/vendor/bin/phpcpd --verbose --exclude vendor thinkphp || true
+  - vendor/bin/phpcpd --verbose --exclude vendor ./ || true
   ## PHPLOC
-  - thinkphp/vendor/bin/phploc --exclude vendor thinkphp
+  - vendor/bin/phploc --exclude vendor ./
   ## PHPUNIT
-  - thinkphp/vendor/bin/phpunit --coverage-clover=coverage.xml
+  - vendor/bin/phpunit --coverage-clover=coverage.xml --configuration=phpunit.xml
 
 after_success:
   - bash <(curl -s https://codecov.io/bash)
-
